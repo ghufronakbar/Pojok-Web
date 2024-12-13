@@ -36,10 +36,9 @@ function formatRupiah($angka) {
                             <td><?= $transaksi["pelanggan_nama"] ?></td>
                             <td><?= $transaksi["checkout_waktu"] ?></td>
                             <td><?= formatRupiah($transaksi["pembayaran_jumlahbayar"])?></td>
-                            <td><?= $transaksi["checkout_status"] ?></td>
+                            <td><?= ucfirst($transaksi["checkout_status"]) ?></td>
                             <td>
-                                <a href="detailcheckout.php?checkout_id=<?= $transaksi['checkout_id'] ?>" class="btn btn-primary">Detail</a>
-                                <a href="editcheckout.php?checkout_id=<?= $transaksi['checkout_id'] ?>" class="btn btn-warning">Edit</a>
+                                <a href="detailcheckout.php?checkout_id=<?= $transaksi['checkout_id'] ?>" class="btn btn-primary">Detail</a>                                
                             </td>
                         </tr>
                     <?php endforeach; ?>

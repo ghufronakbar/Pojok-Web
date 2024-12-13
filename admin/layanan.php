@@ -22,7 +22,12 @@ while ($tiap_layanan = $ambil_layanan->fetch_assoc()) {
                         <div class="card-body">
                             <h5 class="card-title"><?php echo $layanan["layanan_nama"] ?></h5>
                             <p class="card-text"><?php echo $layanan["layanan_deskripsi"] ?></p>
-                            <p class="card-text">Rp.<?php echo $layanan["layanan_harga"] ?></p>
+                            <div class="d-flex flex-column flex-md-row justify-content-between">
+                                <p class="card-text">Rp.<?php echo $layanan["layanan_harga"] ?></p>
+                                <div style="height: 24px;" class="badge <?php echo ($layanan["status"] == 1) ? 'bg-success' : 'bg-danger'; ?>">
+                                    <?php echo ($layanan["status"] == 1) ? 'Aktif' : 'Tidak Aktif'; ?>
+                                </div>
+                            </div>
                             <a href="editlayanan.php?layanan_id=<?php echo $layanan["layanan_id"]; ?>" class="btn btn-secondary w-100">
                                 <i class="fa fa-pencil" aria-hidden="true"></i> Edit</a>
                         </div>

@@ -1,21 +1,100 @@
-<?php include 'template/header.php';
+<?php
+include 'template/header.php';
 
 $layanan_id = $_GET['layanan_id'];
 $layanan = $conn->query("SELECT * FROM layanan WHERE layanan_id = '$layanan_id'");
 $layanan = $layanan->fetch_assoc();
 
+// Proses perubahan data layanan
 if (isset($_POST['editLayanan'])) {
     $layanan_nama = $_POST['layanan_nama'];
     $layanan_deskripsi = $_POST['layanan_deskripsi'];
     $layanan_harga = $_POST['layanan_harga'];
+    $status = $_POST['status'];
 
-    $conn->query("UPDATE layanan SET layanan_nama = '$layanan_nama', layanan_deskripsi = '$layanan_deskripsi', layanan_harga = '$layanan_harga' WHERE layanan_id = '$layanan_id'");
+    $conn->query("UPDATE layanan SET layanan_nama = '$layanan_nama', layanan_deskripsi = '$layanan_deskripsi', layanan_harga = '$layanan_harga', status = '$status' WHERE layanan_id = '$layanan_id'");
 
     echo "<script>alert('Data Layanan Berhasil Diubah')</script>";
     echo "<script>location = 'layanan.php'</script>";
 }
 
+if (isset($_POST['submitImage']) && isset($_FILES['picture'])) {
+    // Ambil file yang di-upload
+    $file = $_FILES['picture'];
+    $file_name = $file['name'];
+    $file_tmp = $file['tmp_name'];
+    $file_size = $file['size'];
+    $file_error = $file['error'];
+
+    // Validasi file
+    $allowed_extensions = ['jpg', 'jpeg', 'png', 'gif'];
+    $file_ext = strtolower(pathinfo($file_name, PATHINFO_EXTENSION));
+
+    if (in_array($file_ext, $allowed_extensions) && $file_error === 0) {
+        if ($file_size < 5000000) { // Maksimal 5MB
+            // Ubah URL endpoint sesuai dengan API yang ingin digunakan
+            $api_url = "http://localhost:3000/api/layanan/layanan/{$layanan_id}/picture";
+            // $api_url = "https://staging.lestarikehati.com/api/layanan/layanan/{$layanan_id}/picture";
+
+            // Persiapkan data untuk multipart/form-data
+            $data = [
+                'layanan_id' => $layanan_id,
+                'picture' => new CURLFile($file_tmp, $file['type'], $file_name) // Gunakan CURLFile untuk mengirim file
+            ];
+
+            // Inisialisasi cURL
+            $ch = curl_init();
+            curl_setopt($ch, CURLOPT_URL, $api_url);
+            curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+            curl_setopt($ch, CURLOPT_POST, true);
+            curl_setopt($ch, CURLOPT_POSTFIELDS, $data);
+            curl_setopt($ch, CURLOPT_HTTPHEADER, [
+                'Content-Type: multipart/form-data'
+            ]);
+
+            // Eksekusi cURL
+            $response = curl_exec($ch);
+
+            // Debugging - Menampilkan respon dari server
+            // echo "<pre>";
+            // print_r($response); // Menampilkan respons API
+            // echo "</pre>";
+
+            // Periksa jika ada error pada cURL
+            if (curl_errno($ch)) {
+                echo "<script>alert('Terjadi kesalahan saat mengirim gambar: " . curl_error($ch) . "');</script>";
+                error_log("Error cURL: " . curl_error($ch)); // Log cURL error
+            } else {
+                // Decode respons dari API
+                $response_data = json_decode($response, true);
+
+                // Log status HTTP dan respons API
+                $http_status = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+                error_log("HTTP Status: " . $http_status); // Log status HTTP
+                error_log("Response dari API: " . $response); // Log respons API
+
+                // Cek pesan dalam respons untuk memastikan sukses
+                if (isset($response_data['message']) && $response_data['message'] === 'Layanan berhasil diperbarui') {
+                    // echo "<script>window.location.reload();</script>";                    
+                    echo "<script>alert('Gambar berhasil diupdate!');</script>";
+                } else {
+                    echo "<script>alert('Gagal mengupdate gambar.');</script>";
+                }
+            }
+
+            // Tutup cURL
+            curl_close($ch);
+        } else {
+            echo "<script>alert('Ukuran file terlalu besar!');</script>";
+        }
+    } else {
+        echo "<script>alert('Format file tidak valid. Pastikan file gambar yang diupload berformat jpg, jpeg, png, atau gif.');</script>";
+    }
+}
+
 ?>
+
+
 
 <body class="sb-nav-fixed">
     <nav class="sb-topnav navbar navbar-expand navbar-dark bg-red">
@@ -55,6 +134,13 @@ if (isset($_POST['editLayanan'])) {
                             <label for="editDeskripsiDeepClean"> Deskripsi</label>
                             <input type="text" class="form-control" id="editDeskripsiDeepClean" placeholder="Masukan Deskripsi Layanan" name="layanan_deskripsi" value="<?php echo $layanan['layanan_deskripsi']; ?>" />
                         </div>
+                        <div class="form-group mb-3">
+                            <label for="editDeskripsiDeepClean"> Status</label>
+                            <select class="form-control" name="status">
+                                <option value="1" <?php if ($layanan["status"] == 1) echo "selected"; ?>>Aktif</option>
+                                <option value="0" <?php if ($layanan["status"] == 0) echo "selected"; ?>>Tidak Aktif</option>
+                            </select>
+                        </div>
                         <button type="submit" class="btn btn-primary" name="editLayanan">Simpan</button>
                         <a href="layanan.php" class="btn btn-danger text-white">Batal</a>
                     </form>
@@ -73,13 +159,14 @@ if (isset($_POST['editLayanan'])) {
                             <label for="picture">Pilih Gambar</label>
                             <input type="file" class="form-control" id="picture" name="picture" accept="image/*" onchange="previewImageHandler();">
                         </div>
-                        <!-- Tombol Simpan hanya muncul setelah gambar dipilih -->
-                        <button type="button" class="btn btn-primary" id="submitImageButton" onclick="submitImage()">Simpan</button>
+                        <button type="submit" class="btn btn-primary" name="submitImage">Simpan</button>
                     </form>
+
                 </div>
             </div>
         </div>
     </div>
+
 
     <script>
         // Fungsi untuk preview gambar yang dipilih
@@ -95,36 +182,6 @@ if (isset($_POST['editLayanan'])) {
             if (file) {
                 reader.readAsDataURL(file);
             }
-        }
-
-        // Fungsi untuk mengirimkan gambar ke API menggunakan JavaScript (AJAX)
-        function submitImage() {
-            var formData = new FormData(document.getElementById('editImageForm'));
-
-            // Ambil layanan_id dari query string (misalnya ?layanan_id=123)
-            var urlParams = new URLSearchParams(window.location.search);
-            var layanan_id = urlParams.get('layanan_id');
-
-            // Ubah URL endpoint dengan layanan_id
-            var endpoint = `https://staging.lestarikehari.com/api/layanan/picture/${layanan_id}`;
-
-            fetch(endpoint, {
-                    method: 'POST',
-                    body: formData,
-                })
-                .then(response => response.json())
-                .then(data => {
-                    if (data.success) {
-                        alert('Gambar berhasil diupdate!');
-                        document.getElementById("submitImageButton").style.display = "none"; // Sembunyikan tombol setelah berhasil
-                    } else {
-                        alert('Terjadi kesalahan saat mengupdate gambar');
-                    }
-                })
-                .catch(error => {
-                    console.error('Error:', error);
-                    alert('Terjadi kesalahan saat mengirim data');
-                });
         }
     </script>
 </body>
