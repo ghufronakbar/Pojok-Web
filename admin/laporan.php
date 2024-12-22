@@ -1,78 +1,97 @@
 <?php
 include '../conection.php';
 
-$dariTanggal = '';
-$sampaiTanggal = '';
-$layanan_id = '';
-if (isset($_GET['export'])) {
-    $dariTanggal = isset($_GET['dariTanggal']) ? $_GET['dariTanggal'] : '';
-    $sampaiTanggal = isset($_GET['sampaiTanggal']) ? $_GET['sampaiTanggal'] : '';
-    $layanan_id = isset($_GET['layanan']) ? $_GET['layanan'] : '';
+// Inisialisasi variabel filter tanggal
+$dariTanggal = isset($_GET['dariTanggal']) ? $_GET['dariTanggal'] : '';
+$sampaiTanggal = isset($_GET['sampaiTanggal']) ? $_GET['sampaiTanggal'] : '';
 
-    exportLaporan($dariTanggal, $sampaiTanggal, $layanan_id);
-    exit; 
+// Handle export request
+if (isset($_GET['export'])) {
+    // Validasi format tanggal
+    if (!empty($dariTanggal) && !validateDate($dariTanggal)) {
+        die("Format tanggal awal tidak valid");
+    }
+    if (!empty($sampaiTanggal) && !validateDate($sampaiTanggal)) {
+        die("Format tanggal akhir tidak valid");
+    }
+    
+    // Validasi range tanggal
+    if (!empty($dariTanggal) && !empty($sampaiTanggal) && strtotime($dariTanggal) > strtotime($sampaiTanggal)) {
+        die("Tanggal awal tidak boleh lebih besar dari tanggal akhir");
+    }
+
+    exportLaporan($dariTanggal, $sampaiTanggal);
+    exit;
 }
 
 include 'template/header.php';
-
-$layanans = $conn->query("SELECT * FROM layanan");
-$layanans = $layanans->fetch_all(MYSQLI_ASSOC);
-
 ?>
 
-<div class="container-fluid px-4">
+<div class="container-fluid px-4 min-vh-100 d-flex flex-column">
     <h1 class="mt-4">Laporan</h1>
     <div class="card col-xl-6 mb-4">
         <div class="card-header">
             Layanan Shoescare
         </div>
         <div class="card-body">
-            <form method="GET">
+            <form method="GET" id="filterForm">
                 <div class="form-group mb-3">
                     <label for="dariTanggal">Dari Tanggal</label>
-                    <input type="date" class="form-control" id="dariTanggal" name="dariTanggal" value="<?= $dariTanggal ?>">
+                    <input type="date" class="form-control" id="dariTanggal" name="dariTanggal" 
+                           value="<?= htmlspecialchars($dariTanggal) ?>" required>
                 </div>
                 <div class="form-group mb-3">
                     <label for="sampaiTanggal">Sampai Tanggal</label>
-                    <input type="date" class="form-control" id="sampaiTanggal" name="sampaiTanggal" value="<?= $sampaiTanggal ?>">
+                    <input type="date" class="form-control" id="sampaiTanggal" name="sampaiTanggal" 
+                           value="<?= htmlspecialchars($sampaiTanggal) ?>" required>
                 </div>
-                <div class="form-group mb-3">
-                    <label for="layanan">Pilih Layanan</label>
-                    <select class="form-control" name="layanan">
-                        <option value="">Pilih Semua Layanan</option>
-                        <?php foreach ($layanans as $layanan) : ?>
-                            <option value="<?= $layanan['layanan_id'] ?>" <?= $layanan['layanan_id'] == $layanan_id ? 'selected' : '' ?>>
-                                <?= $layanan['layanan_nama'] ?>
-                            </option>
-                        <?php endforeach; ?>
-                    </select>
-                </div>                                
+                <button type="submit" class="btn btn-primary">Filter</button>
+                <button type="button" class="btn btn-success" onclick="exportData()">
+                    Ekspor Laporan ke CSV
+                </button>
             </form>
-            <br>
-            <a href="?export=true&dariTanggal=<?= $dariTanggal ?>&sampaiTanggal=<?= $sampaiTanggal ?>&layanan=<?= $layanan_id ?>" class="btn btn-success">
-                Ekspor Laporan ke CSV
-            </a>
         </div>
-    </div>
+    </div>    
 </div>
-</main>
+
+<script>
+function exportData() {
+    const form = document.getElementById('filterForm');
+    const dariTanggal = form.elements['dariTanggal'].value;
+    const sampaiTanggal = form.elements['sampaiTanggal'].value;
+    
+    if (!dariTanggal || !sampaiTanggal) {
+        alert('Mohon isi kedua tanggal terlebih dahulu');
+        return;
+    }
+    
+    if (new Date(dariTanggal) > new Date(sampaiTanggal)) {
+        alert('Tanggal awal tidak boleh lebih besar dari tanggal akhir');
+        return;
+    }
+    
+    window.location.href = `?export=true&dariTanggal=${dariTanggal}&sampaiTanggal=${sampaiTanggal}`;
+}
+</script>
 
 <?php include 'template/footer.php' ?>
 
 <?php
-function exportLaporan($dariTanggal, $sampaiTanggal, $layanan_id) {
+function validateDate($date) {
+    $d = DateTime::createFromFormat('Y-m-d', $date);
+    return $d && $d->format('Y-m-d') === $date;
+}
+
+function exportLaporan($dariTanggal, $sampaiTanggal) {
     global $conn;
 
     $query = "
         SELECT
             c.checkout_id,
-            k.keranjang_tanggal,
             p.pelanggan_nama,
             p.pelanggan_email,
-            k.keranjang_jumlah_harga,
             c.checkout_waktu,
-            c.checkout_status,
-            pay.pembayaran_jumlahbayar,
+            k.keranjang_jumlah_harga,
             pay.pembayaran_metode,
             pay.pembayaran_status
         FROM
@@ -80,46 +99,66 @@ function exportLaporan($dariTanggal, $sampaiTanggal, $layanan_id) {
         JOIN keranjang k ON c.keranjang_id = k.keranjang_id
         JOIN pelanggan p ON k.pelanggan_id = p.pelanggan_id
         LEFT JOIN pembayaran pay ON c.checkout_id = pay.checkout_id
-        WHERE 1
+        WHERE 1=1
     ";
 
-    if ($dariTanggal) {
-        $query .= " AND c.checkout_waktu >= '$dariTanggal'";
+    $params = [];
+    $types = "";
+
+    if (!empty($dariTanggal)) {
+        $query .= " AND DATE(c.checkout_waktu) >= ?";
+        $params[] = $dariTanggal;
+        $types .= "s";
     }
-    if ($sampaiTanggal) {
-        $query .= " AND c.checkout_waktu <= '$sampaiTanggal'";
+    if (!empty($sampaiTanggal)) {
+        $query .= " AND DATE(c.checkout_waktu) <= ?";
+        $params[] = $sampaiTanggal;
+        $types .= "s";
     }
-    if ($layanan_id) {
-        $query .= " AND EXISTS (
-            SELECT 1 FROM detailkeranjang dk
-            WHERE dk.keranjang_id = k.keranjang_id
-            AND dk.layanan_id = $layanan_id
-        )";
-    }
+
+    $query .= " ORDER BY c.checkout_waktu DESC";
 
     $stmt = $conn->prepare($query);
+    if (!empty($params)) {
+        $stmt->bind_param($types, ...$params);
+    }
     $stmt->execute();
-    $result = $stmt->get_result();  
+    $result = $stmt->get_result();    
 
-    $data = [];
-    while ($row = $result->fetch_assoc()) {
-        $data[] = $row;
-    }
-
-    exportCSV($data);
-}
-
-function exportCSV($data) {
-    header('Content-Type: text/csv');
-    header('Content-Disposition: attachment; filename="laporan_checkout.csv"');
+    // Set headers for CSV download
+    header('Content-Type: text/csv; charset=utf-8');
+    header('Content-Disposition: attachment; filename="laporan_' . date('Y-m-d') . '.csv"');
+    
+    // Create CSV file
     $output = fopen('php://output', 'w');
+    fprintf($output, chr(0xEF).chr(0xBB).chr(0xBF)); // Add BOM for UTF-8
     
-    fputcsv($output, ['Checkout ID', 'Tanggal Keranjang', 'Nama Pelanggan', 'Email Pelanggan', 'Jumlah Harga', 'Waktu Checkout', 'Status Checkout', 'Jumlah Pembayaran', 'Metode Pembayaran', 'Status Pembayaran']);
+    // Write headers
+    fputcsv($output, [
+        'No',
+        'ID Checkout',
+        'Nama Pelanggan',
+        'Email',
+        'Waktu Checkout',
+        'Total (Rp)',
+        'Metode Pembayaran',
+        'Status Pembayaran'
+    ]);
     
-    foreach ($data as $row) {
-        fputcsv($output, $row);
+    $no = 1;
+    while ($row = $result->fetch_assoc()) {
+        fputcsv($output, [
+            $no++,
+            $row['checkout_id'],
+            $row['pelanggan_nama'],
+            $row['pelanggan_email'],
+            date('Y-m-d H:i:s', strtotime($row['checkout_waktu'])),
+            number_format($row['keranjang_jumlah_harga'], 0, ',', '.'),
+            $row['pembayaran_metode'],
+            $row['pembayaran_status']
+        ]);
     }
-
+    
     fclose($output);
     exit;
 }
